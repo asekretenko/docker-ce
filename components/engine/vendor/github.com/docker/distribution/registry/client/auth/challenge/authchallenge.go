@@ -1,11 +1,13 @@
 package challenge
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"github.com/sirupsen/logrus"
 )
 
 // Challenge carries information from a WWW-Authenticate response header.
@@ -73,6 +75,14 @@ func (m *simpleManager) AddResponse(resp *http.Response) error {
 	if resp.Request == nil {
 		return fmt.Errorf("missing request reference")
 	}
+	var rq bytes.Buffer
+	resp.Request.Write(&rq)
+
+	var rs bytes.Buffer
+	resp.Write(&rs)
+
+	logrus.Warnf("AddResponse: request=\n%s\nresp=\n%s", rq.String(), rs.String())
+
 	urlCopy := url.URL{
 		Path:   resp.Request.URL.Path,
 		Host:   resp.Request.URL.Host,

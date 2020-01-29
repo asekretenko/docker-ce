@@ -17,6 +17,8 @@ import (
 	"github.com/docker/docker/registry"
 	"github.com/docker/go-connections/sockets"
 	"golang.org/x/net/context"
+
+	"github.com/sirupsen/logrus"
 )
 
 // ImageTypes represents the schema2 config types for images
@@ -108,6 +110,7 @@ func NewV2Repository(ctx context.Context, repoInfo *registry.RepositoryInfo, end
 			Actions:    actions,
 			Class:      repoInfo.Class,
 		}
+		logrus.Warnf("NewV2Repository, repository scope: %s", scope.String())
 
 		creds := registry.NewStaticCredentialStore(authConfig)
 		tokenHandlerOptions := auth.TokenHandlerOptions{

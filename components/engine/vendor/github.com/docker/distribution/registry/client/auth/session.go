@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -65,6 +66,14 @@ func NewAuthorizer(manager challenge.Manager, handlers ...AuthenticationHandler)
 		handlers:   handlers,
 	}
 }
+
+
+func RequestToString(req *http.Request) string {
+	var b bytes.Buffer
+	req.Write(&b)
+	return b.String();
+}
+
 
 type endpointAuthorizer struct {
 	challenges challenge.Manager
@@ -222,6 +231,12 @@ func NewTokenHandlerWithOptions(options TokenHandlerOptions) AuthenticationHandl
 		clock:         realClock{},
 	}
 
+	scopes := make([]string, 0, len(handler.scopes))
+	for _, scope := range handler.scopes {
+		scopes = append(scopes, scope.String())
+	}
+
+	logrus.Warnf("NewTokenHandlerWithOptions,, scopes=%s", strings.Join(scopes, ","))
 	return handler
 }
 
@@ -245,6 +260,9 @@ func (th *tokenHandler) AuthorizeRequest(req *http.Request, params map[string]st
 		}.String())
 	}
 
+	logrus.Warnf("AuthorizeRequest for\n%s\nadditional scopes: %s", RequestToString(req), strings.Join(additionalScopes, "|"))
+
+
 	token, err := th.getToken(params, additionalScopes...)
 	if err != nil {
 		return err
@@ -262,6 +280,9 @@ func (th *tokenHandler) getToken(params map[string]string, additionalScopes ...s
 	for _, scope := range th.scopes {
 		scopes = append(scopes, scope.String())
 	}
+	logrus.Warnf("getToken, scopes=%s", strings.Join(scopes, ","))
+
+
 	var addedScopes bool
 	for _, scope := range additionalScopes {
 		scopes = append(scopes, scope)
@@ -296,6 +317,7 @@ type postTokenResponse struct {
 }
 
 func (th *tokenHandler) fetchTokenWithOAuth(realm *url.URL, refreshToken, service string, scopes []string) (token string, expiration time.Time, err error) {
+	logrus.Warnf("fetchTokenWithOAuth")
 	form := url.Values{}
 	form.Set("scope", strings.Join(scopes, " "))
 	form.Set("service", service)
@@ -322,6 +344,8 @@ func (th *tokenHandler) fetchTokenWithOAuth(realm *url.URL, refreshToken, servic
 		// refuse to do oauth without a grant type
 		return "", time.Time{}, fmt.Errorf("no supported grant type")
 	}
+
+	logrus.Warnf("fetchTokenWithOAuth realm: %s |  form: %s", realm.String(), form.Encode());
 
 	resp, err := th.client().PostForm(realm.String(), form)
 	if err != nil {
@@ -368,6 +392,7 @@ type getTokenResponse struct {
 }
 
 func (th *tokenHandler) fetchTokenWithBasicAuth(realm *url.URL, service string, scopes []string) (token string, expiration time.Time, err error) {
+	logrus.Warnf("fetchTokenWithBasicAuth: realm=%s, service=%s, scopes=%s", realm.String(), service, strings.Join(scopes, ","))
 
 	req, err := http.NewRequest("GET", realm.String(), nil)
 	if err != nil {
@@ -402,6 +427,7 @@ func (th *tokenHandler) fetchTokenWithBasicAuth(realm *url.URL, service string, 
 	}
 
 	req.URL.RawQuery = reqParams.Encode()
+	logrus.Warnf("fetchTokenWithBasicAuth request:\n%s", RequestToString(req))
 
 	resp, err := th.client().Do(req)
 	if err != nil {
@@ -451,10 +477,13 @@ func (th *tokenHandler) fetchTokenWithBasicAuth(realm *url.URL, service string, 
 }
 
 func (th *tokenHandler) fetchToken(params map[string]string, scopes []string) (token string, expiration time.Time, err error) {
+	logrus.Warnf("fetchToken, scopes = %s", strings.Join(scopes, ","))
+
 	realm, ok := params["realm"]
 	if !ok {
 		return "", time.Time{}, errors.New("no realm specified for token auth challenge")
 	}
+	logrus.Warnf("realm %s", realm)
 
 	// TODO(dmcgowan): Handle empty scheme and relative realm
 	realmURL, err := url.Parse(realm)
@@ -463,10 +492,12 @@ func (th *tokenHandler) fetchToken(params map[string]string, scopes []string) (t
 	}
 
 	service := params["service"]
+	logrus.Warnf("service %s", service)
 
 	var refreshToken string
 
 	if th.creds != nil {
+		logrus.Warnf("refreshToken");
 		refreshToken = th.creds.RefreshToken(realmURL, service)
 	}
 
@@ -474,6 +505,7 @@ func (th *tokenHandler) fetchToken(params map[string]string, scopes []string) (t
 		return th.fetchTokenWithOAuth(realmURL, refreshToken, service, scopes)
 	}
 
+	//logrus.Warnf("call fetchTokenWithBasicAuth, realm %s, service %s, scopes %s", realmURL.Encode(), service, strings.Join(scopes, ','))
 	return th.fetchTokenWithBasicAuth(realmURL, service, scopes)
 }
 

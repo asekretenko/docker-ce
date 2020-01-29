@@ -187,6 +187,14 @@ func v2AuthHTTPClient(endpoint *url.URL, authTransport http.RoundTripper, modifi
 		ClientID:      AuthClientID,
 		Scopes:        scopes,
 	}
+
+	scopes_ := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		scopes_ = append(scopes_, scope.String())
+	}
+
+	logrus.Warnf("v2AuthHTTPClient, scopes=%s", strings.Join(scopes_, ","))
+
 	tokenHandler := auth.NewTokenHandlerWithOptions(tokenHandlerOptions)
 	basicHandler := auth.NewBasicHandler(creds)
 	modifiers = append(modifiers, auth.NewAuthorizer(challengeManager, tokenHandler, basicHandler))
